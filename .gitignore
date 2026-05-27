@@ -1,0 +1,10 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+node_modules/
+wwwroot/media/
+wwwroot/thumbnails/
+*.log

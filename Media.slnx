@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Media.Application/Media.Application.csproj" />
+    <Project Path="src/Media.Domain/Media.Domain.csproj" />
+    <Project Path="src/Media.Infrastructure/Media.Infrastructure.csproj" />
+    <Project Path="src/Media.WebApi/Media.WebApi.csproj" />
+  </Folder>
+</Solution>
