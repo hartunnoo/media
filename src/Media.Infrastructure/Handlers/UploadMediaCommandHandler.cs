@@ -13,14 +13,28 @@ public class UploadMediaCommandHandler(
     IMediaRepository repository, IFileStorageService fileStorage, IUnitOfWork unitOfWork)
     : IRequestHandler<UploadMediaCommand, UploadResultDto>
 {
+    private static readonly Dictionary<string, string> MimeMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg",
+        [".png"] = "image/png", [".webp"] = "image/webp",
+        [".gif"] = "image/gif", [".bmp"] = "image/bmp",
+        [".heic"] = "image/heic", [".heif"] = "image/heif",
+        [".svg"] = "image/svg+xml", [".pdf"] = "application/pdf",
+    };
+
     public async Task<UploadResultDto> Handle(UploadMediaCommand request, CancellationToken ct)
     {
         var ext = Path.GetExtension(request.OriginalFileName).ToLowerInvariant();
 
+        // Default ContentType from extension if missing
+        var contentType = !string.IsNullOrWhiteSpace(request.ContentType)
+            ? request.ContentType
+            : MimeMap.GetValueOrDefault(ext, "application/octet-stream");
+
         var item = new MediaItem
         {
             OriginalFileName = request.OriginalFileName,
-            ContentType = request.ContentType,
+            ContentType = contentType,
             FileSize = request.FileStream.Length,
             OwnedByUserId = request.OwnedByUserId,
             OwnedByAppId = request.OwnedByAppId,
