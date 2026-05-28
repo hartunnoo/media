@@ -1,6 +1,7 @@
 using Media.Infrastructure;
 using Media.Application;
 using Hangfire;
+using Serilog;
 
 // Detect published app directory for Windows Service
 var mediaAppDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
@@ -11,8 +12,17 @@ if (Directory.Exists(mediaWebRoot))
     args = [..args, "--contentRoot", mediaAppDir, "--webRoot", mediaWebRoot];
 }
 
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Information()
+    .WriteTo.Console()
+    .WriteTo.File(Path.Combine(mediaAppDir, "logs", "media-api-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 7)
+    .CreateLogger();
+
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Host.UseSerilog();
 builder.Host.UseWindowsService();
 
 builder.Services.AddControllers();
@@ -59,6 +69,21 @@ app.MapHub<Media.Infrastructure.Hubs.MediaHub>("/hubs/media");
 if (!string.IsNullOrEmpty(app.Configuration.GetConnectionString("MediaDb")))
 {
     app.UseHangfireDashboard("/hangfire");
+
+    // Fire-and-forget warmup via ThreadPool
+    var warmupSvc = app.Services.GetRequiredService<Media.Infrastructure.Services.ThumbnailWarmupService>();
+    ThreadPool.QueueUserWorkItem(async _ =>
+    {
+        var log = app.Services.GetRequiredService<ILogger<Media.Infrastructure.Services.ThumbnailWarmupService>>();
+        log.LogInformation("Thumbnail warmup scheduled — starting in 30 seconds");
+        await Task.Delay(TimeSpan.FromSeconds(30));
+        while (true)
+        {
+            try { await warmupSvc.RunWarmupAsync(CancellationToken.None); }
+            catch (Exception ex) { log.LogWarning(ex, "Warmup cycle failed"); }
+            await Task.Delay(TimeSpan.FromMinutes(30));
+        }
+    });
 }
 
 // ── Status page restart endpoints (fallback if Pesambah is down) ───

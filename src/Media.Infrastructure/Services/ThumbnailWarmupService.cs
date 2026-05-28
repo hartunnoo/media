@@ -1,20 +1,18 @@
 using Media.Application.Interfaces;
 using Media.Domain.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Media.Infrastructure.Services;
 
 /// <summary>
-/// Periodically scans for image media items that lack thumbnails and generates them.
-/// Runs every 30 minutes to avoid competing with the Hangfire processing queue.
+/// Hangfire-driven thumbnail warmup — scans for items missing thumbnails and generates them.
+/// Called by recurring job every 30 minutes.
 /// </summary>
-public sealed class ThumbnailWarmupService : BackgroundService
+public sealed class ThumbnailWarmupService
 {
     private readonly IServiceProvider _services;
     private readonly ILogger<ThumbnailWarmupService> _logger;
-    private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
     private const int BatchSize = 50;
 
     public ThumbnailWarmupService(IServiceProvider services, ILogger<ThumbnailWarmupService> logger)
@@ -23,27 +21,7 @@ public sealed class ThumbnailWarmupService : BackgroundService
         _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // Delay first run to let the app fully start
-        await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken);
-
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await ProcessBatchAsync(stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Thumbnail warmup cycle failed");
-            }
-
-            await Task.Delay(Interval, stoppingToken);
-        }
-    }
-
-    private async Task ProcessBatchAsync(CancellationToken ct)
+    public async Task RunWarmupAsync(CancellationToken ct)
     {
         using var scope = _services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<IMediaRepository>();
@@ -51,6 +29,7 @@ public sealed class ThumbnailWarmupService : BackgroundService
         var fileStorage = scope.ServiceProvider.GetRequiredService<IFileStorageService>();
 
         var ids = await repository.GetIdsWithoutThumbnailsAsync(BatchSize, ct);
+
         if (ids.Count == 0) return;
 
         _logger.LogInformation("Thumbnail warmup: found {Count} items needing thumbnails", ids.Count);
@@ -62,12 +41,20 @@ public sealed class ThumbnailWarmupService : BackgroundService
             try
             {
                 var item = await repository.GetByIdAsync(id, ct);
-                if (item is null || !item.ContentType.StartsWith("image/")) continue;
+                if (item is null) continue;
 
                 await using var stream = await fileStorage.GetStreamAsync(id, item.StoredFileName, ct);
                 if (stream is null) continue;
 
-                var thumbnails = await thumbnailService.GenerateAsync(stream, ct);
+                // Buffer into bytes: SKBitmap.Decode closes the stream
+                var buffer = new byte[item.FileSize > 0 ? item.FileSize : stream.Length];
+                await stream.ReadExactlyAsync(buffer, ct);
+
+                using var probe = SkiaSharp.SKBitmap.Decode(buffer);
+                if (probe is null) continue;
+
+                using var ms = new MemoryStream(buffer);
+                var thumbnails = await thumbnailService.GenerateAsync(ms, ct);
                 if (thumbnails.Count > 0)
                 {
                     await ((ThumbnailService)thumbnailService).SaveThumbnailsAsync(id, thumbnails, ct);

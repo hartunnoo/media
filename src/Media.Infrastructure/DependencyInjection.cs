@@ -34,7 +34,7 @@ public static class DependencyInjection
         services.AddSingleton<IThumbnailService, ThumbnailService>();
         services.AddScoped<IMediaProcessingService, MediaProcessingService>();
 
-        services.AddHostedService<ThumbnailWarmupService>();
+        services.AddSingleton<ThumbnailWarmupService>();
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
 

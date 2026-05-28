@@ -55,7 +55,7 @@ public class MediaRepository(MediaDbContext context) : IMediaRepository
     public async Task<IReadOnlyList<Guid>> GetIdsWithoutThumbnailsAsync(int batchSize, CancellationToken ct = default)
         => await context.MediaItems
             .AsNoTracking()
-            .Where(x => x.ContentType.StartsWith("image/") && x.Status == Domain.Enums.MediaStatus.Available)
+            .Where(x => x.Status == Domain.Enums.MediaStatus.Available)
             .OrderBy(x => x.CreatedAt)
             .Select(x => x.Id)
             .Take(batchSize)
