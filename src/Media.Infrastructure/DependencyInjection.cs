@@ -15,11 +15,17 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructureServices(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("MediaDb")
-            ?? throw new InvalidOperationException("Connection string 'MediaDb' not found.");
+        var connectionString = configuration.GetConnectionString("MediaDb");
+        var useInMemory = string.IsNullOrWhiteSpace(connectionString);
 
-        services.AddDbContext<MediaDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        if (useInMemory)
+        {
+            services.AddDbContext<MediaDbContext>(options => options.UseInMemoryDatabase("MediaDb"));
+        }
+        else
+        {
+            services.AddDbContext<MediaDbContext>(options => options.UseNpgsql(connectionString!));
+        }
 
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<MediaDbContext>());
         services.AddScoped<IMediaRepository, MediaRepository>();
@@ -30,9 +36,12 @@ public static class DependencyInjection
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(DependencyInjection).Assembly));
 
-        services.AddHangfire(config =>
-            config.UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString)));
-        services.AddHangfireServer();
+        if (!useInMemory)
+        {
+            services.AddHangfire(config =>
+                config.UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString!)));
+            services.AddHangfireServer();
+        }
 
         return services;
     }

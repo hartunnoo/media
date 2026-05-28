@@ -15,7 +15,10 @@ namespace Media.WebApi.Controllers;
 public class MediaController(IMediator mediator) : ControllerBase
 {
     [HttpPost("upload")]
-    public async Task<ActionResult<UploadResultDto>> Upload([FromForm] IFormFile file, [FromForm] Guid? folderId, [FromForm] string ownedByUserId = "system", [FromForm] string? ownedByAppId = null)
+    [RequestSizeLimit(100 * 1024 * 1024)] // 100 MB
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<UploadResultDto>> Upload(
+        IFormFile file, [FromForm] Guid? folderId, [FromForm] string ownedByUserId = "system", [FromForm] string? ownedByAppId = null)
     {
         await using var stream = file.OpenReadStream();
         var result = await mediator.Send(new UploadMediaCommand(stream, file.FileName, file.ContentType, folderId, ownedByUserId, ownedByAppId));
@@ -34,11 +37,18 @@ public class MediaController(IMediator mediator) : ControllerBase
     }
 
     [HttpGet("{id:guid}/download")]
-    public async Task<ActionResult> Download(Guid id)
+    public async Task<ActionResult> Download(Guid id, [FromServices] Media.Application.Interfaces.IFileStorageService fileStorage)
     {
         var item = await mediator.Send(new GetMediaByIdQuery(id));
         if (item is null) return NotFound();
-        return Ok(new { downloadUrl = $"/api/media/{id}/stream" });
+
+        // Files are stored as "original.{ext}" inside the mediaId folder
+        var ext = Path.GetExtension(item.OriginalFileName);
+        if (string.IsNullOrEmpty(ext)) ext = ".bin";
+        var stream = await fileStorage.GetStreamAsync(id, $"original{ext}");
+        if (stream is null) return NotFound();
+
+        return File(stream, item.ContentType, item.OriginalFileName);
     }
 
     [HttpPut("{id:guid}/rename")]
@@ -49,8 +59,9 @@ public class MediaController(IMediator mediator) : ControllerBase
     }
 
     [HttpPut("{id:guid}/swap")]
-    public async Task<ActionResult> Swap(Guid id, [FromForm] IFormFile file, [FromForm] string? comment)
+    public async Task<ActionResult> Swap(Guid id, [FromForm] string? comment)
     {
+        var file = HttpContext.Request.Form.Files[0];
         await using var stream = file.OpenReadStream();
         await mediator.Send(new SwapMediaCommand(id, stream, file.ContentType, comment));
         return NoContent();

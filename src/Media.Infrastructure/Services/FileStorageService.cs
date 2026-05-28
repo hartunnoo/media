@@ -14,10 +14,12 @@ public class FileStorageService : IFileStorageService
 
     public async Task<string> SaveAsync(Guid mediaId, Stream stream, string extension, CancellationToken ct = default)
     {
-        var yearMonth = DateTime.UtcNow.ToString("yyyy/MM");
-        var dir = Path.Combine(_basePath, yearMonth);
+        var ext = NormalizeExtension(extension);
+        var now = DateTime.UtcNow;
+        var dir = Path.Combine(_basePath, now.ToString("yyyy"), now.ToString("MM"), mediaId.ToString("N"));
         Directory.CreateDirectory(dir);
-        var storedName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}{extension}";
+
+        var storedName = $"original{ext}";
         var path = Path.Combine(dir, storedName);
         await using var fs = File.Create(path);
         await stream.CopyToAsync(fs, ct);
@@ -32,10 +34,48 @@ public class FileStorageService : IFileStorageService
 
     public Task DeleteAsync(Guid mediaId, string storedFileName, CancellationToken ct = default)
     {
-        var path = GetStoragePath(mediaId, storedFileName);
-        if (File.Exists(path)) File.Delete(path);
+        // Delete the entire media folder (original + thumbnails)
+        var dir = GetMediaDirectory(mediaId);
+        if (Directory.Exists(dir))
+        {
+            Directory.Delete(dir, recursive: true);
+        }
         return Task.CompletedTask;
     }
 
-    public string GetStoragePath(Guid mediaId, string storedFileName) => Path.Combine(_basePath, storedFileName);
+    public string GetStoragePath(Guid mediaId, string storedFileName)
+        => Path.Combine(GetMediaDirectory(mediaId), storedFileName);
+
+    public string GetThumbnailDirectory(Guid mediaId)
+        => Path.Combine(GetMediaDirectory(mediaId), "thumbnails");
+
+    private string GetMediaDirectory(Guid mediaId)
+    {
+        // Find the media folder by searching year/month directories
+        var years = Directory.GetDirectories(_basePath);
+        foreach (var yearDir in years)
+        {
+            var months = Directory.GetDirectories(yearDir);
+            foreach (var monthDir in months)
+            {
+                var mediaDir = Path.Combine(monthDir, mediaId.ToString("N"));
+                if (Directory.Exists(mediaDir)) return mediaDir;
+            }
+        }
+        // Fallback if not found (for new saves)
+        return Path.Combine(_basePath, DateTime.UtcNow.ToString("yyyy"), DateTime.UtcNow.ToString("MM"), mediaId.ToString("N"));
+    }
+
+    private static string NormalizeExtension(string ext)
+    {
+        ext = (ext ?? ".bin").ToLowerInvariant().Trim();
+        if (!ext.StartsWith('.')) ext = "." + ext;
+        // Normalize common variants
+        return ext switch
+        {
+            ".jpeg" => ".jpg",
+            ".svg+xml" => ".svg",
+            _ => ext
+        };
+    }
 }

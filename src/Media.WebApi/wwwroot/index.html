@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Media API — Test Console</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--border:#334155;--accent:#c9a84c;--text:#e2e8f0;--muted:#94a3b8;--ok:#22c55e;--err:#ef4444;--btn:#3b82f6}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);padding:20px}
+h1{font-size:20px;margin-bottom:4px}h1 span{color:var(--accent)}
+.sub{color:var(--muted);font-size:12px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px;max-width:700px}
+.card h2{font-size:14px;color:var(--accent);margin-bottom:14px;text-transform:uppercase;letter-spacing:.5px}
+.row{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center}
+input,select,button{padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px;font-family:inherit}
+button{cursor:pointer;background:var(--btn);border-color:var(--btn);font-weight:600}
+button:hover{opacity:.85}
+button.accent{background:var(--accent);border-color:var(--accent);color:#0f172a}
+pre{background:#0a0f1a;padding:12px;border-radius:6px;overflow-x:auto;font-size:11px;max-height:300px;overflow-y:auto;color:#22c55e;font-family:'Cascadia Code',monospace}
+#upload-status{margin-top:8px;font-size:12px}
+#upload-status.ok{color:var(--ok)}#upload-status.err{color:var(--err)}
+.result-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.result-item{background:var(--bg);padding:10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid var(--border)}
+.result-item:hover{border-color:var(--accent)}
+.result-item .name{font-weight:600;color:var(--text)}
+.result-item .meta{color:var(--muted)}
+</style>
+</head>
+<body>
+<h1>Media API <span>Test Console</span></h1>
+<p class="sub">http://localhost:5070 — Upload, list, search, rename, delete, restore files</p>
+
+<div class="card">
+<h2>1. Upload a File</h2>
+<div class="row"><input type="file" id="file-input"><button onclick="upload()" class="accent">Upload</button></div>
+<div id="upload-status"></div>
+</div>
+
+<div class="card">
+<h2>2. All Files</h2>
+<div class="row"><input type="text" id="search" placeholder="Search..." style="flex:1"><button onclick="listFiles()">Search</button></div>
+<div id="list" class="result-grid" style="margin-top:12px"></div>
+</div>
+
+<div class="card">
+<h2>3. File Details</h2>
+<div class="row"><input type="text" id="detail-id" placeholder="Media ID..." style="flex:1;min-width:300px"><button onclick="getDetail()">Get</button></div>
+<pre id="detail"></pre>
+</div>
+
+<div class="card">
+<h2>4. Rename / Delete / Restore</h2>
+<div class="row"><input type="text" id="action-id" placeholder="Media ID..." style="flex:1;min-width:200px"><input type="text" id="new-name" placeholder="New name..." style="flex:1;min-width:150px"></div>
+<div class="row" style="margin-top:6px"><button onclick="renameFile()">Rename</button><button onclick="delFile()" style="background:#ef4444;border-color:#ef4444">Delete</button><button onclick="restoreFile()" style="background:#22c55e;border-color:#22c55e">Restore</button></div>
+<pre id="action"></pre>
+</div>
+
+<script>
+const API='http://localhost:5070/api/media';
+function $id(id){return document.getElementById(id)}
+
+async function upload(){
+  const f=$id('file-input').files[0];
+  if(!f){setMsg('upload-status','Select a file','err');return}
+  setMsg('upload-status','Uploading...','');
+  const fd=new FormData();fd.append('file',f);fd.append('ownedByUserId','test');
+  try{const r=await fetch(API+'/upload',{method:'POST',body:fd});const d=await r.json();
+  setMsg('upload-status','Done! ID: '+d.mediaId,'ok');$id('action-id').value=d.mediaId;$id('detail-id').value=d.mediaId;listFiles()}catch(e){setMsg('upload-status',e.message,'err')}
+}
+
+async function listFiles(){
+  const s=$id('search').value;
+  try{const r=await fetch(API+'?search='+encodeURIComponent(s));const items=await r.json();
+  const c=$id('list');
+  if(!items.length){c.innerHTML='<div class="result-item"><span class="meta">No files</span></div>';return}
+  c.innerHTML=items.map(i=>'<div class="result-item" onclick="sel(\''+i.id+'\')"><div class="name">'+escapeHtml(i.originalFileName)+'</div><div class="meta">'+fmtSize(i.fileSize)+' | '+i.status+' | '+new Date(i.createdAt).toLocaleString()+'</div><div class="meta" style="font-size:10px;word-break:break-all">'+i.id+'</div></div>').join('')
+  }catch(e){$id('list').innerHTML='<div class="result-item"><span class="meta">'+e.message+'</span></div>'}
+}
+
+function sel(id){$id('detail-id').value=id;$id('action-id').value=id;getDetail()}
+
+async function getDetail(){
+  const id=$id('detail-id').value||$id('action-id').value;if(!id)return;
+  try{const r=await fetch(API+'/'+id);$id('detail').textContent=JSON.stringify(await r.json(),null,2)}catch(e){$id('detail').textContent=e.message}
+}
+
+async function renameFile(){
+  const id=$id('action-id').value,n=$id('new-name').value;if(!id||!n)return;
+  try{await fetch(API+'/'+id+'/rename',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({newFileName:n})});$id('action').textContent='OK: '+n;listFiles()}catch(e){$id('action').textContent=e.message}
+}
+
+async function delFile(){
+  const id=$id('action-id').value;if(!id)return;
+  try{await fetch(API+'/'+id+'?deletedBy=test',{method:'DELETE'});$id('action').textContent='Deleted';listFiles()}catch(e){$id('action').textContent=e.message}
+}
+
+async function restoreFile(){
+  const id=$id('action-id').value;if(!id)return;
+  try{await fetch(API+'/'+id+'/restore?restoredBy=test',{method:'POST'});$id('action').textContent='Restored';listFiles()}catch(e){$id('action').textContent=e.message}
+}
+
+function setMsg(el,msg,cls){const e=$id(el);e.textContent=msg;e.className=cls}
+function fmtSize(b){if(!b)return'0 B';const u=['B','KB','MB','GB'];let i=0,s=b;while(s>=1024&&i<3){s/=1024;i++}return s.toFixed(1)+' '+u[i]}
+function escapeHtml(t){return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+listFiles();
+</script>
+</body>
+</html>

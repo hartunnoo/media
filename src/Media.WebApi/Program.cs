@@ -6,7 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c => c.OperationFilter<Media.WebApi.SwaggerFileOperationFilter>());
 builder.Services.AddSignalR();
 
 builder.Services.AddApplicationServices();
@@ -20,9 +20,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.UseRouting();
 app.MapControllers();
 app.MapHub<Media.Infrastructure.Hubs.MediaHub>("/hubs/media");
-app.UseHangfireDashboard("/hangfire");
+if (!string.IsNullOrEmpty(app.Configuration.GetConnectionString("MediaDb")))
+{
+    app.UseHangfireDashboard("/hangfire");
+}
 
 app.Run();

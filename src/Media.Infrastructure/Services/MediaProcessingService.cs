@@ -45,12 +45,7 @@ public class MediaProcessingService(
                 {
                     stream.Position = 0;
                     var thumbnails = await thumbnailService.GenerateAsync(stream, ct);
-                    foreach (var (size, bytes) in thumbnails)
-                    {
-                        var thumbDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "thumbnails", mediaId.ToString());
-                        Directory.CreateDirectory(thumbDir);
-                        await File.WriteAllBytesAsync(Path.Combine(thumbDir, $"{size}.webp"), bytes, ct);
-                    }
+                    await (thumbnailService as ThumbnailService)!.SaveThumbnailsAsync(mediaId, thumbnails, ct);
                 }
             }
 
