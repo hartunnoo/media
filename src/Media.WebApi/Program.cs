@@ -39,4 +39,31 @@ if (!string.IsNullOrEmpty(app.Configuration.GetConnectionString("MediaDb")))
     app.UseHangfireDashboard("/hangfire");
 }
 
+// ── Status page restart endpoints (fallback if Pesambah is down) ───
+app.MapPost("/api/admin/restart-service", async (HttpContext ctx) =>
+{
+    var key = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+    if (key != (app.Configuration["InternalApi:Key"] ?? "hmo-sso-internal-sync-key-2026-secure-v2"))
+        return Results.Unauthorized();
+    var svc = ctx.Request.Query["svc"].ToString();
+    var allowed = new[] { "KoleksiPesambah","KoleksiAlbumKDYMM","HmoSso","SSCU","HmoMediaApi","ProjectTracker" };
+    if (!allowed.Contains(svc, StringComparer.OrdinalIgnoreCase)) return Results.BadRequest("Unknown");
+    try
+    {
+        System.Diagnostics.Process.Start("cmd.exe", $"/c sc.exe stop {svc} & sc.exe start {svc}");
+        return Results.Ok(new { service = svc });
+    }
+    catch (Exception ex) { return Results.Problem(ex.Message); }
+}).RequireHost("*");
+
+app.MapPost("/api/admin/restart-tunnel", async (HttpContext ctx) =>
+{
+    var key = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+    if (key != (app.Configuration["InternalApi:Key"] ?? "hmo-sso-internal-sync-key-2026-secure-v2"))
+        return Results.Unauthorized();
+    System.Diagnostics.Process.Start("powershell.exe", "-Command \"Get-Process cloudflared -EA 0 | Stop-Process -Force; Start-Process 'C:\\Program Files (x86)\\cloudflared\\cloudflared.exe' -ArgumentList '--config C:\\Users\\hartu\\.cloudflared\\config.yml tunnel run' -NoNewWindow\"");
+    return Results.Ok(new { status = "ok" });
+}).RequireHost("*");
+
 app.Run();
+
