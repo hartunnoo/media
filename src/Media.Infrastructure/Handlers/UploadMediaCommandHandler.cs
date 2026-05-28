@@ -2,6 +2,7 @@ using Media.Application.Commands.UploadMedia;
 using Media.Application.DTOs;
 using Media.Application.Interfaces;
 using Media.Domain.Entities;
+using Media.Domain.Enums;
 using Media.Domain.Interfaces;
 using MediatR;
 using Hangfire;
@@ -16,7 +17,6 @@ public class UploadMediaCommandHandler(
     {
         var ext = Path.GetExtension(request.OriginalFileName).ToLowerInvariant();
 
-        // Create entity first to get the ID, then save file with that ID
         var item = new MediaItem
         {
             OriginalFileName = request.OriginalFileName,
@@ -34,6 +34,14 @@ public class UploadMediaCommandHandler(
         item.StoragePath = fileStorage.GetStoragePath(item.Id, storedName);
 
         await repository.AddAsync(item, ct);
+
+        await repository.AddAuditLogAsync(new MediaAuditLog
+        {
+            MediaId = item.Id,
+            Action = MediaActionType.Create,
+            UserId = request.OwnedByUserId
+        }, ct);
+
         await unitOfWork.SaveChangesAsync(ct);
 
         try { BackgroundJob.Enqueue<IMediaProcessingService>(s => s.ProcessAsync(item.Id, CancellationToken.None)); }

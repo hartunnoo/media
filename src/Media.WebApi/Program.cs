@@ -20,10 +20,15 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c => c.OperationFilter<Media.WebApi.SwaggerFileOperationFilter>());
 builder.Services.AddSignalR();
 
+builder.Services.AddCors(o => o.AddDefaultPolicy(p => p
+    .AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseCors();
 
 app.UseSwagger();
 app.UseSwaggerUI();
@@ -32,6 +37,23 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+// Require API key for mutation endpoints — GET/download/thumbnail remain public
+app.Use(async (ctx, next) =>
+{
+    if (!ctx.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase))
+    {
+        var key = ctx.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var expected = app.Configuration.GetValue<string>("ApiKey") ?? "hmo-media-api-key-2026";
+        if (key != expected)
+        {
+            ctx.Response.StatusCode = 401;
+            return;
+        }
+    }
+    await next();
+});
+
 app.MapControllers();
 app.MapHub<Media.Infrastructure.Hubs.MediaHub>("/hubs/media");
 if (!string.IsNullOrEmpty(app.Configuration.GetConnectionString("MediaDb")))

@@ -61,7 +61,7 @@ public class MediaController(IMediator mediator) : ControllerBase
         var thumb = await thumbnailService.GetThumbnailAsync(id, size);
         if (thumb is not null) return File(thumb, "image/webp");
 
-        // Fall back to full image (generate thumbnail async for next time)
+        // Fall back to full image (return as byte array to fix stream length issue)
         var item = await mediator.Send(new GetMediaByIdQuery(id));
         if (item is null) return NotFound();
         var ext = Path.GetExtension(item.OriginalFileName);
@@ -69,14 +69,19 @@ public class MediaController(IMediator mediator) : ControllerBase
         var stream = await fileStorage.GetStreamAsync(id, $"original{ext}");
         if (stream is null) return NotFound();
 
-        // Generate thumbnail in background for future requests
+        // Read full stream for proper Content-Length
+        using var ms = new MemoryStream();
+        await stream.CopyToAsync(ms);
+        var data = ms.ToArray();
+
+        // Generate and save thumbnail in background for next request
+        var bgStream = new MemoryStream(data);
         _ = Task.Run(async () => {
-            try { stream.Position = 0; var thumbnails = await thumbnailService.GenerateAsync(stream); await thumbnailService.SaveThumbnailsAsync(id, thumbnails); }
-            catch { /* best effort */ }
+            try { var thumbnails = await thumbnailService.GenerateAsync(bgStream); await thumbnailService.SaveThumbnailsAsync(id, thumbnails); bgStream.Dispose(); }
+            catch { bgStream.Dispose(); }
         });
 
-        stream.Position = 0;
-        return File(stream, item.ContentType, item.OriginalFileName);
+        return File(data, item.ContentType, item.OriginalFileName);
     }
 
     [HttpPut("{id:guid}/rename")]

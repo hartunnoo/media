@@ -51,4 +51,16 @@ public class MediaRepository(MediaDbContext context) : IMediaRepository
 
     public async Task<string?> GetFileHashAsync(string hash, CancellationToken ct = default)
         => await context.MediaItems.Where(x => x.FileHash == hash).Select(x => x.OriginalFileName).FirstOrDefaultAsync(ct);
+
+    public async Task<IReadOnlyList<Guid>> GetIdsWithoutThumbnailsAsync(int batchSize, CancellationToken ct = default)
+        => await context.MediaItems
+            .AsNoTracking()
+            .Where(x => x.ContentType.StartsWith("image/") && x.Status == Domain.Enums.MediaStatus.Available)
+            .OrderBy(x => x.CreatedAt)
+            .Select(x => x.Id)
+            .Take(batchSize)
+            .ToListAsync(ct);
+
+    public async Task AddAuditLogAsync(MediaAuditLog log, CancellationToken ct = default)
+        => await context.MediaAuditLogs.AddAsync(log, ct);
 }

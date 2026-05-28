@@ -1,4 +1,5 @@
 using Media.Application.Commands.SoftDeleteMedia;
+using Media.Domain.Entities;
 using Media.Domain.Enums;
 using Media.Domain.Interfaces;
 using MediatR;
@@ -16,6 +17,14 @@ public class SoftDeleteMediaCommandHandler(IMediaRepository repository, IUnitOfW
         item.DeletedAt = DateTime.UtcNow;
         item.DeletedBy = request.DeletedBy;
         repository.Update(item);
+
+        await repository.AddAuditLogAsync(new MediaAuditLog
+        {
+            MediaId = item.Id,
+            Action = MediaActionType.SoftDelete,
+            UserId = request.DeletedBy
+        }, ct);
+
         await unitOfWork.SaveChangesAsync(ct);
     }
 }

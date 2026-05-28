@@ -15,4 +15,6 @@ public interface IMediaRepository
     Task AddVersionAsync(MediaVersion version, CancellationToken ct = default);
     Task PruneVersionsAsync(Guid mediaId, int keepCount, CancellationToken ct = default);
     Task<string?> GetFileHashAsync(string hash, CancellationToken ct = default);
+    Task<IReadOnlyList<Guid>> GetIdsWithoutThumbnailsAsync(int batchSize, CancellationToken ct = default);
+    Task AddAuditLogAsync(MediaAuditLog log, CancellationToken ct = default);
 }
