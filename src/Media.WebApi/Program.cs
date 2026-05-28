@@ -2,7 +2,18 @@ using Media.Infrastructure;
 using Media.Application;
 using Hangfire;
 
+// Detect published app directory for Windows Service
+var mediaAppDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
+var mediaWebRoot = Path.Combine(mediaAppDir, "wwwroot");
+if (Directory.Exists(mediaWebRoot))
+{
+    Directory.SetCurrentDirectory(mediaAppDir);
+    args = [..args, "--contentRoot", mediaAppDir, "--webRoot", mediaWebRoot];
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseWindowsService();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -14,11 +25,8 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

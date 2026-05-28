@@ -1,4 +1,6 @@
 using Media.Application.Interfaces;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 
 namespace Media.Infrastructure.Services;
 
@@ -6,9 +8,10 @@ public class FileStorageService : IFileStorageService
 {
     private readonly string _basePath;
 
-    public FileStorageService()
+    public FileStorageService(IConfiguration configuration, IWebHostEnvironment env)
     {
-        _basePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "media");
+        _basePath = configuration.GetValue<string>("Storage:BasePath")
+            ?? Path.Combine(env.WebRootPath ?? env.ContentRootPath, "media");
         Directory.CreateDirectory(_basePath);
     }
 
