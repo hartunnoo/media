@@ -6,4 +6,5 @@ public interface IFileStorageService
     Task<Stream?> GetStreamAsync(Guid mediaId, string storedFileName, CancellationToken ct = default);
     Task DeleteAsync(Guid mediaId, string storedFileName, CancellationToken ct = default);
     string GetStoragePath(Guid mediaId, string storedFileName);
+    Task<string> RenameAsync(Guid mediaId, string oldStoredFileName, string newFileName, CancellationToken ct = default);
 }

@@ -12,7 +12,7 @@ public class ListMediaQueryHandler(IMediaRepository repository)
     {
         var items = await repository.ListAsync(request.Search, request.FolderId, request.OwnedByUserId, request.Skip, request.Take, ct);
         return items.Select(item => new MediaItemDto(
-            item.Id, item.OriginalFileName, item.ContentType, item.FileSize, item.FileHash,
+            item.Id, item.OriginalFileName, item.StoredFileName, item.ContentType, item.FileSize, item.FileHash,
             item.Status, item.OwnedByUserId, item.OwnedByAppId, item.FolderId,
             null, item.IsLegalHold, item.CreatedAt, item.CreatedBy,
             item.UpdatedAt, item.UpdatedBy, item.DeletedAt)).ToList();

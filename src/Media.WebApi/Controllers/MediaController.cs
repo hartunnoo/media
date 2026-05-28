@@ -42,10 +42,14 @@ public class MediaController(IMediator mediator) : ControllerBase
         var item = await mediator.Send(new GetMediaByIdQuery(id));
         if (item is null) return NotFound();
 
-        // Files are stored as "original.{ext}" inside the mediaId folder
-        var ext = Path.GetExtension(item.OriginalFileName);
-        if (string.IsNullOrEmpty(ext)) ext = ".bin";
-        var stream = await fileStorage.GetStreamAsync(id, $"original{ext}");
+        var storedName = item.StoredFileName;
+        if (string.IsNullOrEmpty(storedName))
+        {
+            var ext = Path.GetExtension(item.OriginalFileName);
+            if (string.IsNullOrEmpty(ext)) ext = ".bin";
+            storedName = $"original{ext}";
+        }
+        var stream = await fileStorage.GetStreamAsync(id, storedName);
         if (stream is null) return NotFound();
 
         return File(stream, item.ContentType, item.OriginalFileName);
@@ -64,9 +68,14 @@ public class MediaController(IMediator mediator) : ControllerBase
         // Fall back to full image (return as byte array to fix stream length issue)
         var item = await mediator.Send(new GetMediaByIdQuery(id));
         if (item is null) return NotFound();
-        var ext = Path.GetExtension(item.OriginalFileName);
-        if (string.IsNullOrEmpty(ext)) ext = ".bin";
-        var stream = await fileStorage.GetStreamAsync(id, $"original{ext}");
+        var storedName = item.StoredFileName;
+        if (string.IsNullOrEmpty(storedName))
+        {
+            var ext = Path.GetExtension(item.OriginalFileName);
+            if (string.IsNullOrEmpty(ext)) ext = ".bin";
+            storedName = $"original{ext}";
+        }
+        var stream = await fileStorage.GetStreamAsync(id, storedName);
         if (stream is null) return NotFound();
 
         // Read full stream for proper Content-Length

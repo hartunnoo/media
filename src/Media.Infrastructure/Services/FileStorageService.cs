@@ -49,6 +49,23 @@ public class FileStorageService : IFileStorageService
     public string GetStoragePath(Guid mediaId, string storedFileName)
         => Path.Combine(GetMediaDirectory(mediaId), storedFileName);
 
+    public Task<string> RenameAsync(Guid mediaId, string oldStoredFileName, string newFileName, CancellationToken ct = default)
+    {
+        var dir = GetMediaDirectory(mediaId);
+        if (!Directory.Exists(dir)) return Task.FromResult(oldStoredFileName);
+
+        var oldPath = Path.Combine(dir, oldStoredFileName);
+        var newPath = Path.Combine(dir, newFileName);
+
+        if (File.Exists(oldPath) && !File.Exists(newPath))
+        {
+            File.Move(oldPath, newPath);
+            return Task.FromResult(newFileName);
+        }
+
+        return Task.FromResult(oldStoredFileName);
+    }
+
     public string GetThumbnailDirectory(Guid mediaId)
         => Path.Combine(GetMediaDirectory(mediaId), "thumbnails");
 
